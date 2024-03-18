@@ -1,2 +1,2 @@
-# flask_rest_api
-Project for internship
+# flask-rest-api
+Internship project. Rest API using Flask
