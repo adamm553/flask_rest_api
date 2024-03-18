@@ -1,2 +1,2 @@
 # flask_rest_api
-Internship project 
+Project for internship
