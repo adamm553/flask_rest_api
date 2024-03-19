@@ -8,6 +8,9 @@ api = Api(app)
 class HelloWorld(Resource):
     def get(self):
         return {"data" : "Hello World"}
+    
+    def post(self):
+        return {"data": "posted"}
 
 #dodanie klasy do strony
 api.add_resource(HelloWorld, "/helloworld")
