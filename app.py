@@ -4,14 +4,15 @@ from flask_restful import Api, Resource
 app = Flask(__name__)
 api = Api(app)
 
-#klasa
-class HelloWorld(Resource):
-    def get(self, name, test):
-        return {"name" : name, "test": test}
+smartphones = {}
+
+
+class Smartphone(Resource):
+    def get(self, smartphone_id):
+        return smartphones[smartphone_id]
     
 
-#dodanie klasy do strony
-api.add_resource(HelloWorld, "/helloworld/<string:name>/<int:test>")
+api.add_resource(Smartphone, "/smartphone/<int:smartphone_id>")
 
 if __name__ == "__main__":
     app.run()
