@@ -1,18 +1,12 @@
-from flask import Flask 
-from flask_restful import Api, Resource
+from flask import Flask, render_template
 
+ 
 app = Flask(__name__)
-api = Api(app)
 
-smartphones = {}
+@app.route('/')
+def Index():
+    return render_template("index.html")
 
-
-class Smartphone(Resource):
-    def get(self, smartphone_id):
-        return smartphones[smartphone_id]
-    
-
-api.add_resource(Smartphone, "/smartphone/<int:smartphone_id>")
 
 if __name__ == "__main__":
     app.run()
