@@ -1,12 +1,19 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request, redirect
+from models import db, DeviceModel
 
- 
 app = Flask(__name__)
 
-@app.route('/')
-def Index():
-    return render_template("index.html")
+app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///devices.db"
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
 
+@app.before_first_request
+def create_table():
+    db.create_all()
 
-if __name__ == "__main__":
-    app.run()
+@app.route('/create', methods = ['GET', 'POST'])
+def create():
+    if request.method == "GET":
+        return render_template('create.html')
+
+app.run()
