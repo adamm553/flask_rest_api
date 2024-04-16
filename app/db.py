@@ -1,85 +1,41 @@
-import sqlite3
-import random
-from app.product.models import ProductModel
-from flask import jsonify
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from flask_rest_api.app.product.models import ProductModel, Base
 
-# def getNewId():
-#     return random.getrandbits(28)
-
-def commit_and_close_connection(conn):
-    conn.commit()
-    conn.close() 
-
-def connect_to_database(db_path):
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
-    return conn, cur 
+engine = create_engine('sqlite:///const/products.db')
+Base.metadata.bind = engine
+DBSession = sessionmaker(bind=engine)
+session = DBSession()
 
 def connect():
-    conn, cur = connect_to_database('const/products.db')
-    cur.execute("""CREATE TABLE IF NOT EXISTS products 
-                (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                product_name TEXT,
-                category TEXT,
-                producer TEXT,
-                description TEXT,
-                price FLOAT)""")
-    
-    try:
-        cur.execute("ALTER TABLE products ADD COLUMN producer TEXT")
-    except sqlite3.OperationalError as e:
-        return jsonify({
-            'res': "Can't create database",
-            'status': '500'
-         })
-    
-    commit_and_close_connection(conn)
+    Base.metadata.create_all(engine)
 
 def insert(product):
-    conn, cur = connect_to_database('const/products.db')
-    cur.execute("INSERT INTO products VALUES (?, ?, ?, ?, ?, ?)", (
-        product.id,
-        product.product_name,
-        product.category,
-        product.producer,
-        product.description,
-        product.price
-    ))
-    commit_and_close_connection(conn)
+    session.add(product)
+    session.commit()
 
 def view():
-    conn, cur = connect_to_database('const/products.db')
-    cur.execute("SELECT * FROM products")
-    rows = cur.fetchall()
-    products = []
-    for row in rows:
-        product = ProductModel(row[0], row[1], row[2], row[3], row[4], row[5])
-        products.append(product)
-    conn.close()
-    return products
+    return session.query(ProductModel).all()
 
 def get_product(id):
-    conn, cur = connect_to_database('const/products.db')
-    cur.execute("SELECT * FROM products where id=?", id)
+    return session.query(ProductModel).filter_by(id=id).first()
 
 def update(product):
-    conn, cur = connect_to_database('const/products.db')
-    cur.execute("UPDATE products SET product_name=?, category=?, producer=?, description=?, price=? WHERE id=?", (
-        product.product_name,
-        product.category,
-        product.producer,
-        product.description,
-        product.price,
-        product.id
-    ))
-    commit_and_close_connection(conn)
+    existing_product = session.query(ProductModel).filter_by(id=product.id).first()
+    if existing_product:
+        existing_product.product_name = product.product_name
+        existing_product.category = product.category
+      #  existing_product.producer = product.producer
+        existing_product.description = product.description
+        existing_product.price = product.price
+        session.commit()
 
 def delete(id):
-    conn, cur = connect_to_database('const/products.db')
-    cur.execute("DELETE FROM products WHERE id=?", (id, ))
-    commit_and_close_connection(conn)
+    product = session.query(ProductModel).filter_by(id=id).first()
+    if product:
+        session.delete(product)
+        session.commit()
 
 def deleteAll():
-    conn, cur = connect_to_database('const/products.db')
-    cur.execute("DELETE FROM products")
-    commit_and_close_connection(conn)
+    session.query(ProductModel).delete()
+    session.commit()
