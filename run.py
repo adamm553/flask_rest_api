@@ -1,9 +1,15 @@
 from flask import Flask, request, jsonify
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.product.models import ProductModel, Base
+from app.models.models import ProductModel, Base, UserModel
+from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
+
 
 app = Flask(__name__)
+app.config['JWT_SECRET_KEY'] = "SUPER-SECRET-KEY"
+jwt = JWTManager(app)
+
+
 engine = create_engine('sqlite:///products.db')
 Base.metadata.bind = engine
 DBSession = sessionmaker(bind=engine)
@@ -11,7 +17,39 @@ session = DBSession()
 
 BASE_URL = '/products'
 
+@app.route('/register', methods=["POST"])
+def register():
+    req_data = request.get_json()
+    username = req_data.get('username')
+    password = req_data.get('password')
+
+    if not username or not password:
+        return jsonify({"msg": "Username and password required"}), 400
+    
+    existing_user = session.query(UserModel).filter_by(username=username).first()
+    if existing_user:
+        return jsonify({"msg": "Username already exists"}), 400
+    
+    new_user = UserModel(username=username, password=password)
+    session.add(new_user)
+    session.commit()
+
+@app.route('/login', methods=['POST'])
+def login():
+    req_data = request.get_json()
+    username = req_data.get('username')
+    password = req_data.get("password")
+
+    user = session.query(UserModel).filter_by(username=username).first()
+    if user and user.password == password:
+        access_token = create_access_token(identity=username)
+        return jsonify(access_token=access_token), 200
+    else:
+        return jsonify({"msg": "Wrong username or password"}), 401
+    
+
 @app.route(BASE_URL, methods=["POST"])
+@jwt_required()
 def post_product():
     req_data = request.get_json()
     product_name = req_data['product_name']
@@ -44,6 +82,7 @@ def post_product():
     })
 
 @app.route(BASE_URL, methods=['GET'])
+@jwt_required()
 def get_products():
     products = session.query(ProductModel).all()
     return jsonify({
@@ -100,6 +139,7 @@ def put_product():
         })
 
 @app.route(f"{BASE_URL}/<int:id>", methods=['DELETE'])
+@jwt_required
 def delete_product(id):
     product = session.query(ProductModel).filter_by(id=id).first()
     if product:
@@ -119,3 +159,4 @@ def delete_product(id):
 
 if __name__ == '__main__':
     app.run()
+

@@ -1,7 +1,7 @@
 from flask import render_template, request, jsonify
 import os, re, datetime
 from app import db
-from flask_rest_api.app.product.models import ProductModel
+from flask_rest_api.app.models.models import ProductModel
 from run import app
 
 

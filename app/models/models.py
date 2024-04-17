@@ -1,7 +1,19 @@
 from sqlalchemy import Column, Integer, String, Float
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+
 
 Base = declarative_base()
+
+class UserModel(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String(100), unique=True, nullable=False)
+    password = Column(String(100), nullable=False)
+
+    def __repr__(self):
+        return f"<UserModel(id=(self.id), username=(self.username))>"
 
 class ProductModel(Base):
     __tablename__ = 'products'
@@ -25,3 +37,4 @@ class ProductModel(Base):
             'description': self.description,
             'price': self.price
         }
+
