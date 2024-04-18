@@ -1,172 +1,135 @@
-from flask import render_template, request, jsonify
-import os, re, datetime
-from app import db
-from flask_rest_api.app.models.models import ProductModel
-from run import app
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, create_access_token, get_jwt_identity
+from app.models.models import UserModel, ProductModel
+from sqlalchemy.orm import Session
 
+user_routes = Blueprint('user_routes', __name__)
+product_routes = Blueprint('product_routes', __name__)
 
-BASE_URL = '/products'
+@user_routes.route('/register', methods=["POST"])
+def register(session: Session):
+    req_data = request.get_json()
+    username = req_data.get('username')
+    password = req_data.get('password')
+    if not username or not password:
+        return jsonify({"msg": "Username and password required"}), 400
+    existing_user = session.query(UserModel).filter_by(username=username).first()
+    if existing_user:
+        return jsonify({"msg": "Username already exists"}), 400
+    new_user = UserModel(username=username, password=password)
+    session.add(new_user)
+    session.commit()
+    return jsonify({"msg": "User registered successfully"}), 201
 
-if not os.path.isfile('products.db'):
-    db.connect()
-
-def isValid(email):
-    regex = re.compile(r'([A-Za-z0-9]+[.-_])*[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Z|a-z]{2,})+')
-    if re.fullmatch(regex, email):
-      return True
+@user_routes.route('/login', methods=['POST'])
+def login(session: Session):
+    req_data = request.get_json()
+    username = req_data.get('username')
+    password = req_data.get("password")
+    user = session.query(UserModel).filter_by(username=username).first()
+    if user and user.password == password:
+        access_token = create_access_token(identity=username)
+        return jsonify(access_token=access_token), 200
     else:
-      return False
+        return jsonify({"msg": "Wrong username or password"}), 401
 
-@app.route(BASE_URL, methods=["POST"])
-def postProduct():
-   print('request: ', request)
-   req_data = request.get_json()
-   email = req_data['email']  
-   if not isValid(email):
-      return jsonify({
-         'status': '422',
-         'res': 'failure',
-         'error': 'Invalid email format. Please enter a valid email address'
-      })
-   ############################
-   product_name = req_data['product_name']
-   category = req_data['category']
-   producer = req_data['producer']
-   description = req_data['description']
-   price = req_data['price']
-   prd = [p.serialize() for p in db.view()]
-   for p in prd:
-      if p['product_name'] == product_name:
-         return jsonify({
-            'res': 'Error, no such a product in the database',
+@product_routes.route('/products', methods=["POST"])
+@jwt_required()
+def post_product(session: Session):
+    req_data = request.get_json()
+    product_name = req_data['product_name']
+    category = req_data['category']
+    description = req_data['description']
+    price = req_data['price']
+    existing_product = session.query(ProductModel).filter_by(product_name=product_name).first()
+    if existing_product:
+        return jsonify({
+            'res': 'Error, a product with the same name already exists',
             'status': '404'
-         })
-    #########################/\/\/\/\
-   pr = ProductModel(db.getNewId(), product_name, category, producer, description, price)
-   print('new product: ', pr.serialize())
-   db.insert(pr)
-   new_prd = [p.serialize() for p in db.view()]
-   print('Products available: ', new_prd)
+        })
+    new_product = ProductModel(
+        product_name=product_name,
+        category=category,
+        description=description,
+        price=price
+    )
+    session.add(new_product)
+    session.commit()
+    return jsonify({
+        'res': new_product.serialize(),
+        'status': '201',
+        'msg': 'New product added!!!'
+    })
 
-   return jsonify({
-                # 'error': '',
-                'res': pr.serialize(),
-                'status': '200',
-                'msg': 'New product added!!!'
-            })
+@product_routes.route('/products', methods=['GET'])
+@jwt_required()
+def get_products(session: Session):
+    products = session.query(ProductModel).all()
+    return jsonify({
+        'res': [product.serialize() for product in products],
+        'status': '200',
+        'msg': 'Products are being loaded',
+        'no_of_products': len(products)
+    })
 
-
-@app.route(BASE_URL, methods=['GET'])
-def getProduct():
-   content_type = request.headers.get('Content-Type')
-   prd = [p.serialize() for p in db.view()]
-   if content_type == 'application/json':
-      json = request.json
-      for p in prd:
-         if p['id'] == int(json['id']):
-            return jsonify({
-                    # 'error': '',
-                    'res': p,
-                    'status': '200',
-                    'msg': 'Products are being loaded'
-                })
-      return jsonify({
-            'error': f"No product with id '{json['id']}'",
+@product_routes.route('/products/<int:id>', methods=['GET'])
+def get_product(session: Session, id):
+    product = session.query(ProductModel).filter_by(id=id).first()
+    if product:
+        return jsonify({
+            'res': product.serialize(),
+            'status': '200',
+            'msg': 'Success getting product by ID!'
+        })
+    else:
+        return jsonify({
+            'error': f"No product with id '{id}'",
             'res': '',
             'status': '404'
         })
-   else:
-      return jsonify({
-                  'res': prd,
-                  'status': '200',
-                  'msg': 'Products are being loaded',
-                  'no_of_products': len(prd)
-                })
 
-@app.route(f"{BASE_URL}/<id>", methods=['GET'])
-def getProductId(id):
-   req_args = request.view_args
-   prd = [p.serialize() for p in db.view()]
-   if req_args:
-      for p in prd:
-         if p['id'] == int(req_args['id']):
-            return jsonify({
-                    # 'error': '',
-                    'res': p,
-                    'status': '200',
-                    'msg': 'Success getting product by ID!'
-                })
-      return jsonify({
-            'error': f"No product with id '{req_args['id']}'.",
+@product_routes.route('/products', methods=['PUT'])
+def put_product(session: Session):
+    req_data = request.get_json()
+    id = req_data['id']
+    product_name = req_data['product_name']
+    category = req_data['category']
+    description = req_data['description']
+    price = req_data['price']
+    product = session.query(ProductModel).filter_by(id=id).first()
+    if product:
+        product.product_name = product_name
+        product.category = category
+        product.description = description
+        product.price = price
+        session.commit()
+        return jsonify({
+            'res': product.serialize(),
+            'status': '200',
+            'msg': f'Success updating the product named {product_name}!'
+        })
+    else:
+        return jsonify({
+            'error': f"No product with id '{id}'",
             'res': '',
             'status': '404'
         })
-   else:
-      return jsonify({
-                    # 'error': '',
-                    'res': prd,
-                    'status': '200',
-                    'msg': 'Getting product by ID',
-                    'no_of_products': len(prd)
-                })
 
-@app.route(BASE_URL, methods=['PUT'])
-def putRequest():
-   req_data = request.get_json()
-   id = req_data['id']
-   product_name = req_data['product_name']
-   category = req_data['category']
-   producer = req_data['producer']
-   description = req_data['description']
-   price = req_data['price']
-
-   prd = [p.serialize() for p in db.view()]
-   for p in prd:
-      if p['id'] == id:
-         pr = ProductModel(
-            id,
-            product_name,
-            category,
-            producer,
-            description,
-            price
-         )
-         print('New product: ', pr.serialize())
-         db.update(pr)
-         new_prd = [p.serialize() for p in db.view()]
-         print('Products in stock', new_prd)
-         return jsonify({
-                # 'error': '',
-                'res': pr.serialize(),
-                'status': '200',
-                'msg': f'Success updating the product named {product_name}!👍😀'
-            })        
-   return jsonify({
-                # 'error': '',
-                'res': f'Failed to update product with name: {product_name}!',
-                'status': '404'
-            })
-
-@app.route(f"{BASE_URL}/<id>", methods=['DELETE'])
-def deleteProduct(id):
-   req_args = request.view_args
-   prd = [p.serialize() for p in db.view()]
-   if req_args:
-      for p in prd:
-         if p['id'] == int(req_args['id']):
-            db.delete(p['id'])
-            updated_prd = [p.serialize() for p in db.view()]
-            print("Updated products: ", updated_prd)
-            return jsonify({
-                    'res': updated_prd,
-                    'status': '200',
-                    'msg': 'Success deleting product by ID!',
-                    'no_of_products': len(updated_prd)
-                })
-   else:
-      return jsonify({
-            'error': f"No product ID sent!",
+@product_routes.route('/products/<int:id>', methods=['DELETE'])
+@jwt_required
+def delete_product(session: Session, id):
+    product = session.query(ProductModel).filter_by(id=id).first()
+    if product:
+        session.delete(product)
+        session.commit()
+        return jsonify({
+            'res': f'Success deleting product with ID {id}!',
+            'status': '200',
+            'msg': 'Product deleted!'
+        })
+    else:
+        return jsonify({
+            'error': f"No product with id '{id}'",
             'res': '',
             'status': '404'
         })
-         
