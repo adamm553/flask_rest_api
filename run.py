@@ -12,6 +12,7 @@ jwt = JWTManager(app)
 
 engine = create_engine('sqlite:///products.db')
 Base.metadata.bind = engine
+Base.metadata.create_all(engine)
 DBSession = sessionmaker(bind=engine)
 session = DBSession()
 
@@ -33,6 +34,8 @@ def register():
     new_user = UserModel(username=username, password=password)
     session.add(new_user)
     session.commit()
+
+    return jsonify({"msg": "User registered successfully"}), 201
 
 @app.route('/login', methods=['POST'])
 def login():
