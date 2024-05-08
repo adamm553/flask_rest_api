@@ -53,7 +53,7 @@ def login():
 
 @app.route(BASE_URL, methods=["POST"])
 @jwt_required()
-def post_product():
+def create_product():
     req_data = request.get_json()
     product_name = req_data['product_name']
     category = req_data['category']
